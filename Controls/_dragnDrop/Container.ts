@@ -1,7 +1,6 @@
 import Control = require('Core/Control');
 import Env = require('Env/Env');
 import template = require('wml!Controls/_dragnDrop/Container/Container');
-import 'css!Controls/_dragnDrop/Container';
 import entity = require('Types/entity');
 
       var
@@ -1069,6 +1068,7 @@ import entity = require('Types/entity');
       });
 
       DragNDropController._private = _private;
+      DragNDropController._styles = ['Controls/_dragnDrop/Container'];
 
       DragNDropController.getDefaultOptions = function() {
          return {
