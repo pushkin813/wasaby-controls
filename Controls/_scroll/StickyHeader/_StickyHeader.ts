@@ -174,7 +174,7 @@ export default class StickyHeader extends Control<IStickyHeaderOptions> {
         this._initObserver();
 
         this._updateBottomShadowStyle();
-        this._initResizeObserver();
+        //this._initResizeObserver();
     }
 
     protected _beforeUnmount(): void {

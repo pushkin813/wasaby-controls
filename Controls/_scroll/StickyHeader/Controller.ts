@@ -12,6 +12,12 @@ interface IShadowVisible {
     [id: number]: boolean;
 }
 
+interface IResizeObserver {
+    observe: (el: HTMLElement) => void;
+    unobserve: (el: HTMLElement) => void;
+    disconnect: () => void;
+}
+
 class Component extends Control {
     protected _template: Function = template;
 
@@ -26,6 +32,7 @@ class Component extends Control {
     private _delayedHeaders: TRegisterEventData[] = [];
     private _stickyControllerMounted: boolean = false;
     private _updateTopBottomInitialized: boolean = false;
+    private _resizeObserver: IResizeObserver;
 
     _beforeMount(options) {
         this._headersStack = {
@@ -42,12 +49,18 @@ class Component extends Control {
 
     _afterMount(options) {
         this._stickyControllerMounted = true;
-        RegisterUtil(this, 'controlResize', this._resizeHandler.bind(this));
+        if (!this._resizeObserver) {
+            RegisterUtil(this, 'controlResize', this._resizeHandler.bind(this));
+        }
         this._registerDelayed();
     }
 
     _beforeUnmount(): void {
-        UnregisterUtil(this, 'controlResize');
+        if (this._resizeObserver) {
+            this._resizeObserver.disconnect();
+        } else {
+            UnregisterUtil(this, 'controlResize');
+        }
     }
 
     /**
@@ -132,13 +145,43 @@ class Component extends Control {
             if (!isHidden(data.container) && this._stickyControllerMounted) {
                 return Promise.resolve().then(this._registerDelayed.bind(this));
             }
-
+            this._observeContainer(data.container);
         } else {
             delete this._headers[data.id];
             this._removeFromHeadersStack(data.id, data.position);
             this._removeFromDelayedStack(data.id);
+            this._unobserveContainer(this._headers[data.id].container);
         }
         return Promise.resolve();
+    }
+
+    _unobserveContainer(container: HTMLElement): void {
+        if (typeof window !== 'undefined' && window.ResizeObserver && this._resizeObserver) {
+            if (getComputedStyle(container, null).display === 'contents') {
+                container.childNodes.forEach((elem: HTMLElement) => {
+                    this._resizeObserver.unobserve(elem);
+                });
+            } else {
+                this._resizeObserver.unobserve(container);
+            }
+        }
+    }
+
+    _observeContainer(container: HTMLElement): void {
+        if (typeof window !== 'undefined' && window.ResizeObserver) {
+            if (!this._resizeObserver) {
+                this._resizeObserver = new ResizeObserver(() => {
+                    this._resizeHandler();
+                });
+            }
+            if (getComputedStyle(container, null).display === 'contents') {
+                container.childNodes.forEach((elem: HTMLElement) => {
+                    this._resizeObserver.observe(elem);
+                });
+            } else {
+                this._resizeObserver.observe(container);
+            }
+        }
     }
 
     /**
@@ -171,9 +214,10 @@ class Component extends Control {
     }
 
     _resizeHandler() {
+        const isSimpleHeaders = this._headersStack.top.length <= 1 && this._headersStack.bottom.length <= 1;
         // Игнорируем все собятия ресайза до _afterMount.
         // В любом случае в _afterMount мы попробуем рассчитать положение заголовков.
-        if (this._stickyControllerMounted) {
+        if (this._stickyControllerMounted && !isSimpleHeaders) {
             this._registerDelayed();
             this._updateTopBottom();
         }
